@@ -26,27 +26,15 @@
         zoneId: '11622626',
     });
 </script>
-
-    <style>
-    #skyscraper-left {
-        position: fixed;
-        left: 20px;
-        top: 50%;
-        transform: translateY(-50%);
-        z-index: 5;
-    }
-    @media (max-width: 1000px) {
-        #skyscraper-left { display: none; }
-    }
-</style>
-
-<div id="skyscraper-left"></div>
-<script type="text/javascript">
-    aclib.runBanner({
-        zoneId: '11622726',
-        container: 'skyscraper-left'
-    });
-</script>
+<!-- Side Ad Script -->
+<div id="skyscraper-left" style="position: absolute; left: 10px; top: 100px;">
+    <script type="text/javascript">
+        aclib.runBanner({
+            zoneId: '11622726',
+            container: 'skyscraper-left'
+        });
+    </script>
+</div>
     
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
