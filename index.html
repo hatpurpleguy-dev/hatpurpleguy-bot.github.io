@@ -178,17 +178,17 @@
         if (state !== 'playing') { ctx.fillStyle = 'rgba(5, 5, 15, 0.7)'; ctx.fillRect(0,0,WIDTH,HEIGHT); ctx.fillStyle = '#48e0ff'; ctx.font = 'bold 42px Courier New'; ctx.textAlign = 'center'; ctx.fillText(state === 'start' ? "ASTRO-DASH" : "GAME OVER", WIDTH/2, HEIGHT/2 - 30); ctx.font = 'bold 24px Courier New'; ctx.fillStyle = '#e2e8f0'; ctx.fillText(state === 'start' ? "TAP TO START" : "FINAL SCORE: " + score, WIDTH/2, HEIGHT/2 + 30); }
     }
 
-    function triggerAction() {
-        initAudio();
-        if (state === 'playing') {
-            shipVY = THRUST;
-            if (audioCtxStarted && thrustSynth) { thrustSynth.triggerAttackRelease("G2", "16n"); thrustSynth.frequency.exponentialRampToValueAtTime("G4", Tone.now() + 0.1); }
-            spawnParticles(WIDTH * 0.25 - 35, shipY, '#e2e8f0', 8, 4, 1.5);
-       } else {
-    if (state === 'gameover') { window.open('https://omg10.com/4/11189266', '_blank'); }
-    state = 'playing'; score = 0; asteroids = []; particles = []; shockwaves = []; flashAlpha = 0; shipY = HEIGHT / 2; shipVY = 0; shipAngle = 0; shake = 0;
+   function triggerAction() {
+    initAudio();
+    if (state === 'playing') {
+        shipVY = THRUST;
+        if (audioCtxStarted && thrustSynth) { thrustSynth.triggerAttackRelease("G2", "16n"); thrustSynth.frequency.exponentialRampToValueAtTime("G4", Tone.now() + 0.1); }
+        spawnParticles(WIDTH * 0.25 - 35, shipY, '#e2e8f0', 8, 4, 1.5);
+    } else {
+        if (state === 'gameover') { window.open('https://omg10.com/4/11189266', '_blank'); }
+        state = 'playing'; score = 0; asteroids = []; particles = []; shockwaves = []; flashAlpha = 0; shipY = HEIGHT / 2; shipVY = 0; shipAngle = 0; shake = 0;
+    }
 }
-
     canvas.addEventListener('mousedown', triggerAction);
     window.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); triggerAction(); } });
     function loop() { update(); draw(); requestAnimationFrame(loop); }
