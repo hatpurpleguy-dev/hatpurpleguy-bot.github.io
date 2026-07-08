@@ -28,7 +28,28 @@
     </style>
 </head>
 <body>
+       
+    </style>
+    <div class="page-layout" style="padding-top:0;">
+    <a href="#" id="supportLink" style="color:#fde047; font-size:15px; text-decoration:none; border:1px solid rgba(253,224,71,0.4); padding:8px 16px; border-radius:20px; background:rgba(253,224,71,0.05);">Click here to support me🤗❤️, its as simple as watching an ad</a>
+</div>
 
+<script>
+    // 👉 PASTE YOUR MONETAG DIRECT LINKS HERE — as many as you want.
+    const directLinks = [
+        "https://omg10.com/4/11189259",
+        "https://omg10.com/4/11189262",
+        "https://omg10.com/4/11189267"
+    ];
+
+    document.getElementById('supportLink').addEventListener('click', function(e) {
+        e.preventDefault();
+        const randomLink = directLinks[Math.floor(Math.random() * directLinks.length)];
+        window.open(randomLink, '_blank');
+    });
+</script>
+</head>
+<body>
 <div class="page-layout">
     <h1 class="game-title">ASTRO-DASH</h1>
 
