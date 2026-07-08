@@ -184,8 +184,10 @@
             shipVY = THRUST;
             if (audioCtxStarted && thrustSynth) { thrustSynth.triggerAttackRelease("G2", "16n"); thrustSynth.frequency.exponentialRampToValueAtTime("G4", Tone.now() + 0.1); }
             spawnParticles(WIDTH * 0.25 - 35, shipY, '#e2e8f0', 8, 4, 1.5);
-        } else { state = 'playing'; score = 0; asteroids = []; particles = []; shockwaves = []; flashAlpha = 0; shipY = HEIGHT / 2; shipVY = 0; shipAngle = 0; shake = 0; }
-    }
+       } else {
+    if (state === 'gameover') { window.open('https://omg10.com/4/11189266', '_blank'); }
+    state = 'playing'; score = 0; asteroids = []; particles = []; shockwaves = []; flashAlpha = 0; shipY = HEIGHT / 2; shipVY = 0; shipAngle = 0; shake = 0;
+}
 
     canvas.addEventListener('mousedown', triggerAction);
     window.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); triggerAction(); } });
