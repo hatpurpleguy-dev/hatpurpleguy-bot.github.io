@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ASTRO-DASH</title>
+    <style>
+        html, body { overscroll-behavior: none; }
+        body { margin: 0; background: #12121a; color: white; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; padding: 20px; overflow-x: hidden; }
+        .page-layout { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 800px; }
+        
+        /* Game Window Styles - Zoomed out to be more compact */
+        #canvasContainer { 
+            position: relative; 
+            width: 100%; 
+            max-width: 800px; 
+            aspect-ratio: 16/9; 
+            background: #05050f; 
+            border: 4px solid #1a1c23; 
+            border-radius: 8px; 
+            box-shadow: 0 15px 30px rgba(0,0,0,0.8), 0 0 20px rgba(72, 224, 255, 0.1); 
+            overflow: hidden; 
+            cursor: pointer; 
+            touch-action: none;
+        }
+        canvas { display: block; image-rendering: pixelated; width: 100%; height: 100%; object-fit: contain; }
+        #overlay { position: absolute; top: 20px; left: 30px; color: #48e0ff; pointer-events: none; font-size: clamp(16px, 2vw, 24px); font-weight: bold; text-shadow: 0 0 10px #48e0ff; z-index: 10; }
+        #speedOverlay { position: absolute; top: 52px; left: 30px; color: #fb923c; pointer-events: none; font-size: clamp(11px, 1.3vw, 15px); font-weight: bold; text-shadow: 0 0 8px rgba(251,146,60,0.6); z-index: 10; }
+        #pauseBtn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 20;
+            width: 38px;
+            height: 34px;
+            background: rgba(5,5,15,0.65);
+            color: #48e0ff;
+            border: 1px solid rgba(72,224,255,0.5);
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        #pauseBtn:hover { background: rgba(72,224,255,0.15); }
+
+        .game-title { margin: 0; font-size: 28px; color: #48e0ff; text-shadow: 0 0 10px rgba(72, 224, 255, 0.5); }
+
+        .controls-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: center; }
+
+        /* Toast (personal best) */
+        .toast {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: rgba(5,5,15,0.9);
+            border: 1px solid #fde047;
+            color: #fde047;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: clamp(12px, 1.6vw, 15px);
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(253,224,71,0.6);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            z-index: 20;
+            white-space: nowrap;
+        }
+        .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* Action buttons under canvas (continue / share) */
+        .action-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        .action-btn {
+            background: rgba(72,224,255,0.08);
+            color: #48e0ff;
+            border: 1px solid rgba(72,224,255,0.4);
+            padding: 9px 18px;
+            border-radius: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            cursor: pointer;
+            letter-spacing: 0.5px;
+            transition: opacity 0.2s ease;
+        }
+        .action-btn:hover:not(:disabled) { background: rgba(72,224,255,0.18); }
+        .action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .action-btn.share { color: #fde047; border-color: rgba(253,224,71,0.4); background: rgba(253,224,71,0.06); }
+        .action-btn.share:hover:not(:disabled) { background: rgba(253,224,71,0.15); }
+
+        /* Leaderboard section (always on page) */
+        .lb-section {
+            background: #12121a;
+            border: 2px solid #1a1c23;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6), 0 0 20px rgba(72,224,255,0.08);
+            width: 100%;
+            max-width: 420px;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        .lb-section h2 {
+            margin: 0 0 4px 0;
+            color: #48e0ff;
+            text-align: center;
+            text-shadow: 0 0 10px rgba(72,224,255,0.5);
+            font-size: 22px;
+            letter-spacing: 2px;
+        }
+        .lb-best {
+            text-align: center;
+            color: #fde047;
+            font-size: 12px;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            opacity: 0.85;
+        }
+        .podium {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            min-height: 150px;
+        }
+        .podium-place {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 30%;
+        }
+        .podium-medal { font-size: 24px; margin-bottom: 4px; }
+        .podium-name { font-size: 13px; color: #e2e8f0; max-width: 95px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .podium-name.lb-own { color: #48e0ff; text-shadow: 0 0 8px rgba(72,224,255,0.7); }
+        .podium-score { font-size: 12px; color: #fde047; margin-bottom: 6px; }
+        .podium-bar {
+            width: 100%;
+            border-radius: 6px 6px 0 0;
+        }
+        .podium-1 .podium-bar { height: 90px; background: linear-gradient(180deg,#fde047,#ca8a04); }
+        .podium-2 .podium-bar { height: 65px; background: linear-gradient(180deg,#e2e8f0,#94a3b8); }
+        .podium-3 .podium-bar { height: 45px; background: linear-gradient(180deg,#fb923c,#9a3412); }
+
+        .lb-list {
+            overflow-y: auto;
+            max-height: 280px;
+            border-top: 1px solid #1a1c23;
+            padding-top: 8px;
+            scrollbar-width: thin;
+            scrollbar-color: #48e0ff #1a1c23;
+        }
+        .lb-list::-webkit-scrollbar { width: 8px; }
+        .lb-list::-webkit-scrollbar-track { background: #1a1c23; border-radius: 4px; }
+        .lb-list::-webkit-scrollbar-thumb { background: #48e0ff; border-radius: 4px; }
+        .lb-list::-webkit-scrollbar-thumb:hover { background: #7ce8ff; }
+        .lb-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 10px;
+            font-size: 13px;
+            color: #94a3b8;
+            border-radius: 4px;
+        }
+        .lb-row:nth-child(odd) { background: rgba(255,255,255,0.03); }
+        .lb-row.lb-own { background: rgba(72,224,255,0.1); }
+        .lb-rank { width: 34px; color: #48e0ff; }
+        .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
+        .lb-row.lb-own .lb-name { color: #48e0ff; font-weight: bold; }
+        .lb-score { color: #fde047; }
+        .lb-empty { text-align: center; color: #475569; padding: 20px 0; font-size: 13px; }
+
+        /* Skins section */
+        .skins-section {
+            background: #12121a;
+            border: 2px solid #1a1c23;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6), 0 0 20px rgba(72,224,255,0.08);
+            width: 100%;
+            max-width: 420px;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        .skins-section h2 {
+            margin: 0 0 14px 0;
+            color: #48e0ff;
+            text-align: center;
+            text-shadow: 0 0 10px rgba(72,224,255,0.5);
+            font-size: 22px;
+            letter-spacing: 2px;
+        }
+        .token-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+            background: rgba(253,224,71,0.06);
+            border: 1px solid rgba(253,224,71,0.3);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+        }
+        #tokenCountEl { color: #fde047; font-weight: bold; font-size: 14px; }
+        #watchAdBtn {
+            background: #48e0ff;
+            color: #05050f;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        #watchAdBtn:hover:not(:disabled) { background: #7ce8ff; }
+        #watchAdBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+        #adLimitEl { color: #64748b; font-size: 11px; width: 100%; text-align: center; }
+        .skins-locked-note {
+            text-align: center;
+            color: #94a3b8;
+            font-size: 12px;
+            padding: 10px 0;
+        }
+        .skin-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        .skin-card {
+            background: #1a1c23;
+            border: 2px solid #334155;
+            border-radius: 10px;
+            padding: 8px 6px 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        .skin-card.selected { border-color: #48e0ff; box-shadow: 0 0 12px rgba(72,224,255,0.35); }
+        .skin-card canvas { image-rendering: pixelated; }
+        .skin-card .skin-name { font-size: 11px; color: #e2e8f0; text-align: center; letter-spacing: 0.5px; }
+        .skin-card button {
+            width: 100%;
+            border: none;
+            border-radius: 6px;
+            padding: 5px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            letter-spacing: 0.5px;
+        }
+        .skin-card .btn-select { background: rgba(72,224,255,0.15); color: #48e0ff; }
+        .skin-card .btn-select:hover { background: rgba(72,224,255,0.28); }
+        .skin-card .btn-selected { background: #48e0ff; color: #05050f; cursor: default; }
+        .skin-card .btn-unlock { background: rgba(253,224,71,0.15); color: #fde047; }
+        .skin-card .btn-unlock:hover:not(:disabled) { background: rgba(253,224,71,0.28); }
+        .skin-card .btn-unlock:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* Name entry overlay (after game over) */
+        .name-entry {
+            position: fixed;
+            inset: 0;
+            background: rgba(5,5,15,0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+        }
+        .name-entry.visible { display: flex; }
+        .name-entry-box {
+            background: #12121a;
+            border: 2px solid #1a1c23;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            width: 100%;
+            max-width: 340px;
+            box-shadow: 0 0 40px rgba(72,224,255,0.15);
+            position: relative;
+        }
+        .ne-close {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            background: transparent;
+            border: none;
+            color: #64748b;
+            font-size: 20px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 4px 8px;
+            font-family: 'Courier New', monospace;
+        }
+        .ne-close:hover { color: #e2e8f0; }
+        .name-entry-box p { color: #48e0ff; margin: 0 0 4px; font-size: 14px; letter-spacing: 1px; }
+        .name-entry-box .ne-score { color: #fde047; font-size: 30px; font-weight: bold; margin-bottom: 16px; text-shadow: 0 0 10px rgba(253,224,71,0.5); }
+        .name-entry-box input {
+            width: 100%;
+            box-sizing: border-box;
+            background: #05050f;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            text-align: center;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+        .name-entry-box input:focus { outline: none; border-color: #48e0ff; }
+        .name-entry-box button {
+            background: #48e0ff;
+            color: #05050f;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+        .name-entry-box button:hover { background: #7ce8ff; }
+
+        /* Auth bar (login status, always visible) */
+        .auth-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 13px;
+            color: #94a3b8;
+            flex-wrap: wrap;
+        }
+        .auth-bar .auth-user { color: #48e0ff; font-weight: bold; }
+        .auth-bar button {
+            background: rgba(72,224,255,0.08);
+            color: #48e0ff;
+            border: 1px solid rgba(72,224,255,0.4);
+            padding: 6px 14px;
+            border-radius: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .auth-bar button:hover { background: rgba(72,224,255,0.18); }
+
+        /* Auth modal (login / sign up) */
+        .auth-tabs { display: flex; gap: 6px; margin: 20px 0 16px; }
+        .name-entry-box .auth-tabs .auth-tab {
+            flex: 1;
+            background: transparent;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            padding: 8px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            font-weight: normal;
+            cursor: pointer;
+            letter-spacing: 1px;
+        }
+        .name-entry-box .auth-tabs .auth-tab.active { background: rgba(72,224,255,0.12); color: #48e0ff; border-color: #48e0ff; font-weight: bold; }
+        .auth-form { display: none; flex-direction: column; }
+        .auth-form.active { display: flex; }
+        .auth-form input {
+            width: 100%;
+            box-sizing: border-box;
+            background: #05050f;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .auth-form input:focus { outline: none; border-color: #48e0ff; }
+        .auth-form button.auth-submit {
+            background: #48e0ff;
+            color: #05050f;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+        .auth-form button.auth-submit:hover { background: #7ce8ff; }
+        .auth-form button.auth-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+        .auth-error { color: #fb7185; font-size: 12px; margin: -4px 0 10px; min-height: 14px; }
+        .auth-note { color: #64748b; font-size: 11px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="page-layout" style="padding-top:0;">
+    <a href="#" id="supportLink" style="color:#fde047; font-size:15px; text-decoration:none; border:1px solid rgba(253,224,71,0.4); padding:8px 16px; border-radius:20px; background:rgba(253,224,71,0.05);">Click here to support me🤗❤️, its as simple as watching an ad</a>
+</div>
+
+<script>
+    // 👉 PASTE YOUR MONETAG DIRECT LINKS HERE — as many as you want.
+    const directLinks = [
+        "https://omg10.com/4/11189259",
+        "https://omg10.com/4/11189262",
+        "https://omg10.com/4/11189267",
+        "https://omg10.com/4/11189265",
+        "https://omg10.com/4/11189264"
+    ];
+
+    document.getElementById('supportLink').addEventListener('click', function(e) {
+        e.preventDefault();
+        const randomLink = directLinks[Math.floor(Math.random() * directLinks.length)];
+        window.open(randomLink, '_blank');
+    });
+</script>
+
+<div class="page-layout">
+    <h1 class="game-title">ASTRO-DASH</h1>
+
+    <div class="auth-bar" id="authBar">
+        <span id="authStatus">Not logged in</span>
+        <button id="authLoginBtn">LOG IN</button>
+        <button id="authSignupBtn">SIGN UP</button>
+        <button id="authLogoutBtn" style="display:none;">LOG OUT</button>
+    </div>
+    <div class="auth-bar" id="verifyBar" style="display:none;">
+        <span style="color:#fde047;">⚠ Verify your email to activate your account &amp; save scores</span>
+        <button id="resendVerifyBtn">RESEND EMAIL</button>
+    </div>
+
+    <div id="canvasContainer">
+        <div id="overlay">SCORE: 0</div>
+        <div id="speedOverlay">SPEED x1.0</div>
+        <button id="pauseBtn" title="Pause">⏸</button>
+        <div class="toast" id="toastEl">NEW PERSONAL BEST!</div>
+        <canvas id="game" width="960" height="540"></canvas>
+    </div>
+
+    <div class="controls-row">
+        <p style="color: #666; font-size: 14px; margin: 0;">Controls: Click / Tap / Space to Thrust</p>
+    </div>
+
+    <div class="action-row">
+        <button class="action-btn" id="continueBtn" disabled>▶ CONTINUE (watch ad)</button>
+        <button class="action-btn share" id="shareBtn" disabled>📤 SHARE SCORE</button>
+    </div>
+
+    <!-- Leaderboard section, always visible -->
+    <div class="lb-section">
+        <h2>TOP PILOTS</h2>
+        <div class="lb-best" id="yourBestEl">YOUR BEST: 0</div>
+        <div class="podium" id="podiumEl"></div>
+        <div class="lb-list" id="lbListEl"></div>
+    </div>
+
+    <!-- Skins section -->
+    <div class="skins-section">
+        <h2>SHIP SKINS</h2>
+        <div class="token-bar">
+            <span id="tokenCountEl">🪙 0 TOKENS</span>
+            <button id="watchAdBtn">🎬 WATCH AD (+2)</button>
+            <span id="adLimitEl">0/5 ads watched today</span>
+        </div>
+        <div class="skins-locked-note" id="skinsLockedNote">Log in (and verify your email) to earn tokens and unlock skins!</div>
+        <div class="skin-grid" id="skinGrid"></div>
+    </div>
+</div>
+
+<!-- Auth Overlay (login / sign up) -->
+<div class="name-entry" id="authOverlay">
+    <div class="name-entry-box">
+        <button class="ne-close" id="authCloseBtn" title="Close">✕</button>
+        <p id="authPromptScore" style="display:none;">SCORE <span class="ne-score" id="authScoreVal" style="display:inline; font-size:20px;"></span> — LOG IN TO SAVE IT!</p>
+        <div class="auth-tabs">
+            <button class="auth-tab active" id="tabLogin">LOG IN</button>
+            <button class="auth-tab" id="tabSignup">SIGN UP</button>
+        </div>
+
+        <form class="auth-form active" id="loginForm">
+            <input type="email" id="loginEmail" placeholder="EMAIL" required autocomplete="email">
+            <input type="password" id="loginPassword" placeholder="PASSWORD" required autocomplete="current-password">
+            <div class="auth-error" id="loginError"></div>
+            <button type="submit" class="auth-submit" id="loginSubmitBtn">LOG IN</button>
+        </form>
+
+        <form class="auth-form" id="signupForm">
+            <input type="text" id="signupName" placeholder="PILOT NAME (shown on leaderboard)" maxlength="12" required>
+            <input type="email" id="signupEmail" placeholder="EMAIL" required autocomplete="email">
+            <input type="password" id="signupPassword" placeholder="PASSWORD (6+ characters)" required autocomplete="new-password">
+            <div class="auth-error" id="signupError"></div>
+            <button type="submit" class="auth-submit" id="signupSubmitBtn">CREATE ACCOUNT</button>
+        </form>
+        <div class="auth-note">Your score saves automatically once you're logged in.</div>
+    </div>
+</div>
+
+<!-- Firebase: accounts + global real-time leaderboard -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+    import {
+        getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+        signOut, onAuthStateChanged, updateProfile, sendEmailVerification
+    } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+    import {
+        getFirestore, doc, getDoc, setDoc, collection, query, orderBy, limit, onSnapshot
+    } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyB6G3PiwrifXsZXF458vb8MtVDhxjTexOI",
+        authDomain: "astro-dash-583fb.firebaseapp.com",
+        projectId: "astro-dash-583fb",
+        storageBucket: "astro-dash-583fb.firebasestorage.app",
+        messagingSenderId: "935630622953",
+        appId: "1:935630622953:web:9d651cba9ca01d80c9e078",
+        measurementId: "G-236X90EMYZ"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentUser = null;
+    let myBestScore = 0;
+    let playerData = { tokens: 0, unlockedSkins: ['classic'], selectedSkin: 'classic', adsToday: 0, lastAdDate: '' };
+
+    function todayStr() { return new Date().toDateString(); }
+
+    function defaultPlayerData() {
+        return { tokens: 0, unlockedSkins: ['classic'], selectedSkin: 'classic', adsToday: 0, lastAdDate: '' };
+    }
+
+    async function loadPlayerData(uid) {
+        try {
+            const snap = await getDoc(doc(db, 'playerData', uid));
+            if (snap.exists()) {
+                const d = snap.data();
+                const sameDay = d.lastAdDate === todayStr();
+                playerData = {
+                    tokens: typeof d.tokens === 'number' ? d.tokens : 0,
+                    unlockedSkins: Array.isArray(d.unlockedSkins) && d.unlockedSkins.length ? d.unlockedSkins : ['classic'],
+                    selectedSkin: d.selectedSkin || 'classic',
+                    adsToday: sameDay ? (d.adsToday || 0) : 0,
+                    lastAdDate: d.lastAdDate || ''
+                };
+            } else {
+                playerData = defaultPlayerData();
+            }
+        } catch (e) {
+            console.error('Failed to load player data:', e);
+            playerData = defaultPlayerData();
+        }
+    }
+
+    async function savePlayerData() {
+        if (!currentUser) return;
+        try {
+            await setDoc(doc(db, 'playerData', currentUser.uid), playerData);
+        } catch (e) {
+            console.error('Failed to save player data:', e);
+        }
+    }
+
+    function friendlyError(err) {
+        const code = err && err.code ? err.code : '';
+        console.error('Firebase auth error:', code, err);
+        if (code.includes('email-already-in-use')) return 'That email already has an account — try logging in.';
+        if (code.includes('invalid-email')) return 'That email address looks invalid.';
+        if (code.includes('weak-password')) return 'Password needs to be at least 6 characters.';
+        if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return 'Incorrect email or password.';
+        if (code.includes('too-many-requests')) return 'Too many attempts — please wait a moment and try again.';
+        if (code.includes('operation-not-allowed')) return 'Email/Password sign-in is not enabled yet in Firebase console (Authentication > Sign-in method).';
+        if (code.includes('unauthorized-domain')) return 'This website\'s domain isn\'t authorized in Firebase yet (Authentication > Settings > Authorized domains).';
+        if (code.includes('network-request-failed')) return 'Network error — check your internet connection.';
+        // Unknown error: show the raw code so it can be diagnosed
+        return code ? ('Error: ' + code) : 'Something went wrong. Please try again.';
+    }
+
+    // Live global top-50 leaderboard
+    const lbQuery = query(collection(db, 'leaderboard'), orderBy('score', 'desc'), limit(50));
+    onSnapshot(lbQuery, (snap) => {
+        const list = [];
+        snap.forEach(d => list.push(d.data()));
+        if (window.onLeaderboardUpdate) window.onLeaderboardUpdate(list);
+    }, (err) => { console.error('Leaderboard listener error:', err); });
+
+    onAuthStateChanged(auth, async (user) => {
+        currentUser = user;
+        myBestScore = 0;
+        if (user) {
+            try {
+                const snap = await getDoc(doc(db, 'leaderboard', user.uid));
+                if (snap.exists()) myBestScore = snap.data().score || 0;
+            } catch (e) { console.error(e); }
+            await loadPlayerData(user.uid);
+        } else {
+            playerData = defaultPlayerData();
+        }
+        if (window.onAuthChange) window.onAuthChange(user, myBestScore);
+    });
+
+    window.LB = {
+        async signUp(name, email, password) {
+            const clean = (name || '').trim().substring(0, 12) || 'ANON';
+            try {
+                const cred = await createUserWithEmailAndPassword(auth, email, password);
+                await updateProfile(cred.user, { displayName: clean });
+                try { await sendEmailVerification(cred.user); } catch (e) { console.error('Could not send verification email:', e); }
+            } catch (err) {
+                err.friendlyMessage = friendlyError(err);
+                throw err;
+            }
+        },
+        async logIn(email, password) {
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (err) {
+                err.friendlyMessage = friendlyError(err);
+                throw err;
+            }
+        },
+        async logOut() {
+            await signOut(auth);
+        },
+        async resendVerification() {
+            if (!currentUser) return false;
+            try {
+                await sendEmailVerification(currentUser);
+                return true;
+            } catch (e) {
+                console.error('Could not resend verification email:', e);
+                return false;
+            }
+        },
+        async submitScore(score) {
+            if (!currentUser || !currentUser.emailVerified) return false;
+            if (score <= myBestScore) return false;
+            myBestScore = score;
+            try {
+                await setDoc(doc(db, 'leaderboard', currentUser.uid), {
+                    name: (currentUser.displayName || 'ANON').substring(0, 12),
+                    score: score,
+                    updatedAt: Date.now()
+                });
+                return true;
+            } catch (e) {
+                console.error('Failed to save score:', e);
+                return false;
+            }
+        },
+        isLoggedIn() { return !!(currentUser && currentUser.emailVerified); },
+        getPlayerData() { return { ...playerData }; },
+        watchAdReward(amount) {
+            if (!currentUser || !currentUser.emailVerified) return { ok: false, reason: 'not-verified' };
+            const today = todayStr();
+            if (playerData.lastAdDate !== today) { playerData.adsToday = 0; playerData.lastAdDate = today; }
+            if (playerData.adsToday >= 5) return { ok: false, reason: 'limit', data: { ...playerData } };
+            playerData.adsToday += 1;
+            playerData.tokens += amount;
+            savePlayerData();
+            return { ok: true, data: { ...playerData } };
+        },
+        unlockSkin(skinId, cost) {
+            if (!currentUser || !currentUser.emailVerified) return { ok: false, reason: 'not-verified' };
+            if (playerData.unlockedSkins.includes(skinId)) return { ok: false, reason: 'owned', data: { ...playerData } };
+            if (playerData.tokens < cost) return { ok: false, reason: 'insufficient', data: { ...playerData } };
+            playerData.tokens -= cost;
+            playerData.unlockedSkins.push(skinId);
+            savePlayerData();
+            return { ok: true, data: { ...playerData } };
+        },
+        selectSkin(skinId) {
+            if (!currentUser || !currentUser.emailVerified) return { ok: false };
+            if (!playerData.unlockedSkins.includes(skinId)) return { ok: false, reason: 'locked' };
+            playerData.selectedSkin = skinId;
+            savePlayerData();
+            return { ok: true, data: { ...playerData } };
+        }
+    };
+</script>
+
+<!-- Load Tone.js for Sound Effects -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+<script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const speedOverlay = document.getElementById('speedOverlay');
+    
+    const WIDTH = 960;
+    const HEIGHT = 540;
+    
+    let state = 'start'; // start | playing | gameover
+    let score = 0;
+    let shipY = HEIGHT / 2;
+    let shipVY = 0;
+    let shipAngle = 0;
+    const GRAVITY = 0.45;
+    const THRUST = -9.5;
+    
+    let asteroids = [];
+    let powerups = [];
+    let stars = [];
+    let nebulae = [];
+    let particles = [];
+    let shake = 0;
+    let flashAlpha = 0;
+    let shockwaves = [];
+    let audioCtxStarted = false;
+    let explosionSynth, thrustSynth, pickupSynth;
+
+    let shieldActive = false;
+    let shieldTimer = 0;
+    let reviveUsed = false;
+    let lastFinalScore = 0;
+    let toastShownThisRun = false;
+
+    function initAudio() {
+        if (!audioCtxStarted && typeof Tone !== 'undefined') {
+            Tone.start();
+            audioCtxStarted = true;
+            const explosionDistortion = new Tone.Distortion(0.8).toDestination();
+            const explosionFilter = new Tone.Filter(800, "lowpass").connect(explosionDistortion);
+            explosionSynth = new Tone.NoiseSynth({ noise: { type: 'brown' }, envelope: { attack: 0.01, decay: 1.5, sustain: 0, release: 0.2 }, volume: -5 }).connect(explosionFilter);
+            thrustSynth = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.15, sustain: 0, release: 0.1 } }).toDestination();
+            thrustSynth.volume.value = -14;
+            pickupSynth = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 } }).toDestination();
+            pickupSynth.volume.value = -8;
+        }
+    }
+
+    function vibrate(pattern) {
+        try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+    }
+
+    function createPixelSprite(data, colorMap, scale = 4) {
+        const rows = data.length;
+        const cols = Math.max(...data.map(r => r.length));
+        const off = document.createElement('canvas');
+        off.width = cols * scale;
+        off.height = rows * scale;
+        const octx = off.getContext('2d');
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < data[r].length; c++) {
+                const char = data[r][c];
+                if (char === '.') continue;
+                octx.fillStyle = colorMap[char];
+                octx.fillRect(c * scale, r * scale, scale, scale);
+            }
+        }
+        return off;
+    }
+
+    const CLASSIC_SHIP_GRID = [
+        "........OO......",
+        ".......OLLO.....",
+        "......OLLLLO....",
+        ".....OLLLLLLO.OO",
+        "....OLLLLLLLOODO",
+        "OO.OLLLLLLLLODDO",
+        "ODOOLLBBBBLLODDO",
+        "ODDOLLBBBBLLODDO",
+        "ODDOLLLLLLLLODDO",
+        "OO.OLLLLLLLLODDO",
+        "....OLLLLLLLOODO",
+        ".....OLLLLLLO.OO",
+        "......OLLLLO....",
+        ".......OLLO.....",
+        "........OO......",
+        "................"
+    ];
+
+    const STICKMAN_GRID = [
+        ".......OAO.......",
+        ".......OAO.......",
+        "......OOOOO......",
+        ".....OLLLLLO.....",
+        "....OLLLLLLLO....",
+        "....OLLHHHLLO....",
+        "....OLLHhhHLLO...",
+        "....OLLHHHLLO....",
+        "....OLLL|LLLO....",
+        "...OOLLLLLLLOO...",
+        "..OOOOOOOOOOOOOO.",
+        ".OCCCCCCCCCCCCCO.",
+        ".OCCEECCCCEECCCO.",
+        "..OCCCCCCCCCCCO..",
+        "...OOCEEEEECOO...",
+        "......OOOOO......"
+    ];
+
+    // Skin registry: id -> { name, cost (tokens, 0 = free/default), grid, colormap }
+    const SKINS = {
+        classic:  { name: 'VOYAGER',   cost: 0,  grid: CLASSIC_SHIP_GRID, colormap: { O: '#1a1c23', L: '#e2e8f0', D: '#64748b', B: '#06b6d4' } },
+        stickman: { name: 'STAR PILOT',cost: 5,  grid: STICKMAN_GRID,     colormap: { O: '#1a1c23', A: '#94a3b8', L: '#e2e8f0', H: '#0f0f14', h: '#ffe0bd', '|': '#0f0f14', C: '#06b6d4', E: '#fb923c' } },
+        inferno:  { name: 'INFERNO',   cost: 4,  grid: CLASSIC_SHIP_GRID, colormap: { O: '#1a1c23', L: '#ef4444', D: '#7f1d1d', B: '#fde047' } },
+        toxic:    { name: 'TOXIC',     cost: 4,  grid: CLASSIC_SHIP_GRID, colormap: { O: '#1a1c23', L: '#84cc16', D: '#14532d', B: '#bef264' } },
+        shadow:   { name: 'SHADOW',    cost: 6,  grid: CLASSIC_SHIP_GRID, colormap: { O: '#0a0a0e', L: '#334155', D: '#0f172a', B: '#a855f7' } },
+        golden:   { name: 'GOLDEN',    cost: 10, grid: CLASSIC_SHIP_GRID, colormap: { O: '#1a1c23', L: '#fbbf24', D: '#92400e', B: '#fff7ed' } }
+    };
+
+    const shipSkinSprites = {};
+    for (const id in SKINS) {
+        shipSkinSprites[id] = createPixelSprite(SKINS[id].grid, SKINS[id].colormap);
+    }
+
+    let currentSkinId = 'classic';
+    let shipSprite = shipSkinSprites.classic; // draw() reads this variable
+
+    const astSprites = [
+        createPixelSprite([".....OOOOOO.....", "...OOLLLLLLOO...", "..OLLLLLLMMMMO..", ".OLMMLMMMMMMMMO.", ".OLMLCCOMMMMMMO.", "OLLMOCCOOMMMMMMO", "OLLMMCOMMMMBBMBO", "OLLLMMMMMMBCCBBO", "OLLMMMMMMMBCCBBO", "OLLMMBBMMMMBBBBO", ".OMMBCCBMMMBBBO.", ".OMMBCCBMMBBMMO.", "..OMMBBMMMBBMO..", "...OOMMMBBBBO...", ".....OOOOOO....."], { O: '#111111', B: '#475569', M: '#64748b', L: '#94a3b8', C: '#334155' }),
+        createPixelSprite(["......OOOO......", "....OOLLLLOO....", "...OLLLLMMMMO...", "..OLLMMMMMMMBO..", ".OLLMMBCCBMMBBO.", ".OLMMMBCCBMMBBO.", "OLLMMMMBBMMMMBBO", "OLLMMMMMMMMMMBBO", "OLMMMCCOMMMMMMBO", "OLMMCCOOMMMMMMBO", ".OMMMCOMMMMMMBO.", ".OMMBBMMMMMMBBO.", "..OMMMMMMMMBBO..", "...OOMMBBBBOO...", "....OOOOOOOO...."], { O: '#111111', B: '#475569', M: '#64748b', L: '#94a3b8', C: '#334155' })
+    ];
+
+    for(let i = 0; i < 150; i++) {
+        stars.push({ x: Math.random() * WIDTH, y: Math.random() * HEIGHT, size: Math.random() < 0.9 ? 2 : 3, speed: Math.random() * 2.5 + 0.5, color: Math.random() < 0.8 ? '#ffffff' : (Math.random() < 0.5 ? '#93c5fd' : '#fde047') });
+    }
+
+    // Parallax nebula blobs, drawn behind stars, drift slowly
+    const nebulaColors = ['rgba(72,224,255,0.05)', 'rgba(253,224,71,0.04)', 'rgba(251,146,60,0.045)', 'rgba(148,163,184,0.04)'];
+    for (let i = 0; i < 6; i++) {
+        nebulae.push({ x: Math.random() * WIDTH, y: Math.random() * HEIGHT, r: 80 + Math.random() * 140, speed: Math.random() * 0.3 + 0.1, color: nebulaColors[i % nebulaColors.length] });
+    }
+
+    function spawnParticles(x, y, color, count, speed, life) {
+        for(let i=0; i<count; i++) {
+            particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * speed, vy: (Math.random() - 0.5) * speed, color: color, life: life, maxLife: life, size: Math.random() * 5 + 3 });
+        }
+    }
+
+    /* ---------------- LEADERBOARD (Firebase: accounts + global, real-time) ---------------- */
+
+    let personalBest = 0;         // synced from Firestore once logged in
+    let loggedInUser = null;      // Firebase user object, set by onAuthChange
+    let latestLbList = [];        // cached last snapshot from onLeaderboardUpdate
+    let pendingScore = 0;         // score waiting to be saved once user logs in
+
+    function escapeHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    const medalEmojis = ['🥇', '🥈', '🥉'];
+
+    function renderLeaderboard() {
+        const lb = latestLbList;
+        const podiumEl = document.getElementById('podiumEl');
+        const listEl = document.getElementById('lbListEl');
+        const myName = loggedInUser ? (loggedInUser.displayName || '') : '';
+
+        document.getElementById('yourBestEl').innerText = 'YOUR BEST: ' + personalBest;
+
+        podiumEl.innerHTML = '';
+        if (lb.length === 0) {
+            podiumEl.style.display = 'none';
+        } else {
+            podiumEl.style.display = 'flex';
+            const order = [1, 0, 2]; // visual order: 2nd, 1st, 3rd
+            order.forEach(idx => {
+                const entry = lb[idx];
+                const place = document.createElement('div');
+                place.className = 'podium-place podium-' + (idx + 1);
+                const name = entry ? escapeHtml(entry.name) : '—';
+                const sc = entry ? entry.score : '—';
+                const isOwn = entry && myName && entry.name === myName;
+                place.innerHTML =
+                    '<div class="podium-medal">' + medalEmojis[idx] + '</div>' +
+                    '<div class="podium-name' + (isOwn ? ' lb-own' : '') + '">' + name + '</div>' +
+                    '<div class="podium-score">' + sc + '</div>' +
+                    '<div class="podium-bar"></div>';
+                podiumEl.appendChild(place);
+            });
+        }
+
+        listEl.innerHTML = '';
+        if (lb.length <= 3) {
+            listEl.innerHTML = '<div class="lb-empty">Play to fill the rest of the top 50!</div>';
+            return;
+        }
+        for (let i = 3; i < lb.length; i++) {
+            const row = document.createElement('div');
+            const isOwn = myName && lb[i].name === myName;
+            row.className = 'lb-row' + (isOwn ? ' lb-own' : '');
+            row.innerHTML =
+                '<span class="lb-rank">#' + (i + 1) + '</span>' +
+                '<span class="lb-name">' + escapeHtml(lb[i].name) + '</span>' +
+                '<span class="lb-score">' + lb[i].score + '</span>';
+            listEl.appendChild(row);
+        }
+    }
+
+    // Called by the Firebase module whenever the global top-50 changes (real-time)
+    window.onLeaderboardUpdate = function (list) {
+        latestLbList = list;
+        renderLeaderboard();
+    };
+
+    /* ---------------- SKINS (tokens earned by watching ads) ---------------- */
+
+    const AD_TOKEN_REWARD = 2;
+    const DAILY_AD_LIMIT = 5;
+    const AD_WATCH_SECONDS = 15;
+    let adCountdownTimer = null;
+
+    function applySelectedSkin(pd) {
+        currentSkinId = (pd && pd.selectedSkin && SKINS[pd.selectedSkin]) ? pd.selectedSkin : 'classic';
+        shipSprite = shipSkinSprites[currentSkinId];
+    }
+
+    function refreshSkinsUI() {
+        const lockedNote = document.getElementById('skinsLockedNote');
+        const grid = document.getElementById('skinGrid');
+        const tokenEl = document.getElementById('tokenCountEl');
+        const adBtn = document.getElementById('watchAdBtn');
+        const adLimitEl = document.getElementById('adLimitEl');
+
+        if (!loggedInUser) {
+            lockedNote.style.display = 'block';
+            grid.style.display = 'none';
+            tokenEl.innerText = '🪙 0 TOKENS';
+            adBtn.disabled = true;
+            adLimitEl.innerText = 'Log in to earn tokens';
+            applySelectedSkin(null);
+            return;
+        }
+
+        lockedNote.style.display = 'none';
+        grid.style.display = 'grid';
+
+        const pd = window.LB.getPlayerData();
+        applySelectedSkin(pd);
+
+        tokenEl.innerText = '🪙 ' + pd.tokens + ' TOKENS';
+        const today = new Date().toDateString();
+        const adsToday = (pd.lastAdDate === today) ? pd.adsToday : 0;
+        adLimitEl.innerText = adsToday + '/' + DAILY_AD_LIMIT + ' ads watched today';
+        adBtn.disabled = adCountdownTimer !== null || adsToday >= DAILY_AD_LIMIT;
+        if (!adCountdownTimer) {
+            adBtn.innerText = adsToday >= DAILY_AD_LIMIT ? '✓ COME BACK TOMORROW' : ('🎬 WATCH AD (+' + AD_TOKEN_REWARD + ')');
+        }
+
+        grid.innerHTML = '';
+        for (const id in SKINS) {
+            const skin = SKINS[id];
+            const owned = pd.unlockedSkins.includes(id);
+            const selected = pd.selectedSkin === id;
+
+            const card = document.createElement('div');
+            card.className = 'skin-card' + (selected ? ' selected' : '');
+
+            const thumb = document.createElement('canvas');
+            thumb.width = 64; thumb.height = 60;
+            const tctx = thumb.getContext('2d');
+            const src = shipSkinSprites[id];
+            const scale = Math.min(64 / src.width, 60 / src.height);
+            const dw = src.width * scale, dh = src.height * scale;
+            tctx.drawImage(src, (64 - dw) / 2, (60 - dh) / 2, dw, dh);
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'skin-name';
+            nameEl.innerText = skin.name;
+
+            const btn = document.createElement('button');
+            if (selected) {
+                btn.className = 'btn-selected';
+                btn.innerText = 'EQUIPPED';
+                btn.disabled = true;
+            } else if (owned) {
+                btn.className = 'btn-select';
+                btn.innerText = 'SELECT';
+                btn.addEventListener('click', () => {
+                    window.LB.selectSkin(id);
+                    refreshSkinsUI();
+                });
+            } else {
+                btn.className = 'btn-unlock';
+                btn.innerText = '🪙 ' + skin.cost;
+                btn.disabled = pd.tokens < skin.cost;
+                btn.addEventListener('click', () => {
+                    const result = window.LB.unlockSkin(id, skin.cost);
+                    if (result.ok) {
+                        showToast(skin.name + ' UNLOCKED!');
+                        window.LB.selectSkin(id);
+                    }
+                    refreshSkinsUI();
+                });
+            }
+
+            card.appendChild(thumb);
+            card.appendChild(nameEl);
+            card.appendChild(btn);
+            grid.appendChild(card);
+        }
+    }
+
+    document.getElementById('watchAdBtn').addEventListener('click', () => {
+        if (!loggedInUser) { showAuthOverlay(0, 'login'); return; }
+        const adBtn = document.getElementById('watchAdBtn');
+        if (adBtn.disabled) return;
+
+        const wasPlaying = (state === 'playing');
+        if (wasPlaying) { state = 'paused'; updateActionButtons(); }
+
+        const randomLink = directLinks[Math.floor(Math.random() * directLinks.length)];
+        window.open(randomLink, '_blank');
+
+        adBtn.disabled = true;
+        let secondsLeft = AD_WATCH_SECONDS;
+        adBtn.innerText = '⏳ ' + secondsLeft + 's...';
+        adCountdownTimer = setInterval(() => {
+            secondsLeft -= 1;
+            if (secondsLeft > 0) {
+                adBtn.innerText = '⏳ ' + secondsLeft + 's...';
+            } else {
+                clearInterval(adCountdownTimer);
+                adCountdownTimer = null;
+                const result = window.LB.watchAdReward(AD_TOKEN_REWARD);
+                if (result.ok) {
+                    showToast('+' + AD_TOKEN_REWARD + ' TOKENS!');
+                } else if (result.reason === 'limit') {
+                    showToast('DAILY AD LIMIT REACHED');
+                }
+                refreshSkinsUI();
+            }
+        }, 1000);
+    });
+
+    // Called by the Firebase module on login/logout
+    window.onAuthChange = function (user, bestScore) {
+        const verified = !!(user && user.emailVerified);
+        loggedInUser = verified ? user : null; // unverified accounts can't be used for gameplay/leaderboard
+        personalBest = verified ? (bestScore || 0) : 0;
+        const statusEl = document.getElementById('authStatus');
+        const loginBtn = document.getElementById('authLoginBtn');
+        const signupBtn = document.getElementById('authSignupBtn');
+        const logoutBtn = document.getElementById('authLogoutBtn');
+        const verifyBar = document.getElementById('verifyBar');
+        if (user) {
+            loginBtn.style.display = 'none';
+            signupBtn.style.display = 'none';
+            logoutBtn.style.display = '';
+            if (verified) {
+                statusEl.innerHTML = 'Logged in as <span class="auth-user">' + escapeHtml(user.displayName || 'PILOT') + '</span>';
+                verifyBar.style.display = 'none';
+            } else {
+                statusEl.innerText = 'Account not verified yet';
+                verifyBar.style.display = 'flex';
+            }
+            // If a score was earned before verifying/logging in, save it now (only once verified)
+            if (verified && pendingScore > 0) {
+                window.LB.submitScore(pendingScore).then(saved => {
+                    if (saved) { personalBest = pendingScore; renderLeaderboard(); }
+                    pendingScore = 0;
+                });
+            }
+        } else {
+            statusEl.innerText = 'Not logged in';
+            loginBtn.style.display = '';
+            signupBtn.style.display = '';
+            logoutBtn.style.display = 'none';
+            verifyBar.style.display = 'none';
+        }
+        renderLeaderboard();
+        refreshSkinsUI();
+    };
+
+    function isOverlayOpen() {
+        return document.getElementById('authOverlay').classList.contains('visible');
+    }
+
+    function switchAuthTab(tab) {
+        const tabLogin = document.getElementById('tabLogin');
+        const tabSignup = document.getElementById('tabSignup');
+        const loginForm = document.getElementById('loginForm');
+        const signupForm = document.getElementById('signupForm');
+        if (tab === 'signup') {
+            tabSignup.classList.add('active'); tabLogin.classList.remove('active');
+            signupForm.classList.add('active'); loginForm.classList.remove('active');
+        } else {
+            tabLogin.classList.add('active'); tabSignup.classList.remove('active');
+            loginForm.classList.add('active'); signupForm.classList.remove('active');
+        }
+    }
+
+    function showAuthOverlay(forScore, tab) {
+        const promptEl = document.getElementById('authPromptScore');
+        if (forScore && forScore > 0) {
+            document.getElementById('authScoreVal').innerText = forScore;
+            promptEl.style.display = 'block';
+            pendingScore = forScore;
+        } else {
+            promptEl.style.display = 'none';
+        }
+        switchAuthTab(tab || 'login');
+        document.getElementById('authOverlay').classList.add('visible');
+    }
+    function hideAuthOverlay() {
+        document.getElementById('authOverlay').classList.remove('visible');
+    }
+
+    // ---- Auth modal wiring ----
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+
+    document.getElementById('tabLogin').addEventListener('click', () => switchAuthTab('login'));
+    document.getElementById('tabSignup').addEventListener('click', () => switchAuthTab('signup'));
+
+    document.getElementById('authLoginBtn').addEventListener('click', () => showAuthOverlay(0, 'login'));
+    document.getElementById('authSignupBtn').addEventListener('click', () => showAuthOverlay(0, 'signup'));
+    document.getElementById('authCloseBtn').addEventListener('click', hideAuthOverlay);
+    document.getElementById('authLogoutBtn').addEventListener('click', () => window.LB.logOut());
+    document.getElementById('resendVerifyBtn').addEventListener('click', async (e) => {
+        e.target.disabled = true;
+        e.target.innerText = 'SENT!';
+        await window.LB.resendVerification();
+        setTimeout(() => { e.target.disabled = false; e.target.innerText = 'RESEND EMAIL'; }, 15000);
+    });
+
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const btn = document.getElementById('loginSubmitBtn');
+        const errEl = document.getElementById('loginError');
+        errEl.innerText = '';
+        btn.disabled = true;
+        try {
+            await window.LB.logIn(
+                document.getElementById('loginEmail').value.trim(),
+                document.getElementById('loginPassword').value
+            );
+            hideAuthOverlay();
+        } catch (err) {
+            errEl.innerText = err.friendlyMessage || 'Incorrect email or password.';
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    signupForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const btn = document.getElementById('signupSubmitBtn');
+        const errEl = document.getElementById('signupError');
+        errEl.innerText = '';
+        btn.disabled = true;
+        try {
+            await window.LB.signUp(
+                document.getElementById('signupName').value.trim(),
+                document.getElementById('signupEmail').value.trim(),
+                document.getElementById('signupPassword').value
+            );
+            hideAuthOverlay();
+            showToast('CHECK YOUR EMAIL TO VERIFY!');
+        } catch (err) {
+            errEl.innerText = err.friendlyMessage || 'Could not create account.';
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    [loginForm, signupForm].forEach(f => f.addEventListener('keydown', e => e.stopPropagation()));
+
+    /* ---------------- Toast (personal best) ---------------- */
+    let toastHideTimer = null;
+    function showToast(text) {
+        const el = document.getElementById('toastEl');
+        el.innerText = text;
+        el.classList.add('visible');
+        if (toastHideTimer) clearTimeout(toastHideTimer);
+        toastHideTimer = setTimeout(() => el.classList.remove('visible'), 2200);
+    }
+
+    /* ---------------- Continue (revive) & Share ---------------- */
+    const continueBtn = document.getElementById('continueBtn');
+    const shareBtn = document.getElementById('shareBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+
+    function updateActionButtons() {
+        continueBtn.disabled = !(state === 'gameover' && !reviveUsed);
+        shareBtn.disabled = lastFinalScore <= 0;
+        pauseBtn.style.display = (state === 'playing' || state === 'paused') ? 'flex' : 'none';
+        pauseBtn.innerText = state === 'paused' ? '▶' : '⏸';
+        pauseBtn.title = state === 'paused' ? 'Resume' : 'Pause';
+    }
+
+    pauseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (state === 'playing') {
+            state = 'paused';
+        } else if (state === 'paused') {
+            state = 'playing';
+        }
+        updateActionButtons();
+    });
+
+    continueBtn.addEventListener('click', () => {
+        if (continueBtn.disabled) return;
+        reviveUsed = true;
+        const randomLink = directLinks[Math.floor(Math.random() * directLinks.length)];
+        window.open(randomLink, '_blank');
+        // Clear immediate danger and resume without resetting score
+        asteroids = asteroids.filter(a => a.x > WIDTH * 0.55);
+        powerups = [];
+        shipY = HEIGHT / 2;
+        shipVY = 0;
+        shipAngle = 0;
+        shake = 0;
+        flashAlpha = 0;
+        state = 'paused';
+        hideAuthOverlay();
+        updateActionButtons();
+    });
+
+    shareBtn.addEventListener('click', () => {
+        if (shareBtn.disabled) return;
+        const share = document.createElement('canvas');
+        share.width = WIDTH;
+        share.height = HEIGHT + 90;
+        const sctx = share.getContext('2d');
+        sctx.fillStyle = '#05050f';
+        sctx.fillRect(0, 0, share.width, share.height);
+        sctx.drawImage(canvas, 0, 90);
+        sctx.fillStyle = '#48e0ff';
+        sctx.font = 'bold 40px Courier New';
+        sctx.textAlign = 'center';
+        sctx.shadowColor = '#48e0ff';
+        sctx.shadowBlur = 12;
+        sctx.fillText('ASTRO-DASH', share.width / 2, 45);
+        sctx.shadowBlur = 0;
+        sctx.fillStyle = '#fde047';
+        sctx.font = 'bold 28px Courier New';
+        sctx.fillText('SCORE: ' + lastFinalScore, share.width / 2, 80);
+        const link = document.createElement('a');
+        link.download = 'astro-dash-score-' + lastFinalScore + '.png';
+        link.href = share.toDataURL('image/png');
+        link.click();
+    });
+
+    /* ------------------------------------------------------------------ */
+
+    function spawnPowerup() {
+        powerups.push({
+            x: WIDTH + 60,
+            y: Math.random() * (HEIGHT - 100) + 50,
+            baseY: 0,
+            phase: Math.random() * Math.PI * 2,
+            size: 26
+        });
+    }
+
+    function update() {
+        if (state === 'paused') return;
+        stars.forEach(s => { s.x -= s.speed + (state === 'playing' ? (score * 0.05) : 0); if (s.x < 0) { s.x = WIDTH; s.y = Math.random() * HEIGHT; } });
+        nebulae.forEach(n => { n.x -= n.speed + (state === 'playing' ? score * 0.01 : 0); if (n.x < -n.r) { n.x = WIDTH + n.r; n.y = Math.random() * HEIGHT; } });
+        for(let i = particles.length - 1; i >= 0; i--) { let p = particles[i]; p.x += p.vx; p.y += p.vy; p.life -= 0.1; if(p.life <= 0) particles.splice(i, 1); }
+        for(let i = shockwaves.length - 1; i >= 0; i--) { let sw = shockwaves[i]; sw.radius += sw.speed; sw.alpha -= 0.03; if(sw.alpha <= 0) shockwaves.splice(i, 1); }
+        if (flashAlpha > 0) flashAlpha -= 0.03;
+        if (shake > 0) shake *= 0.85;
+
+        if (state === 'playing') {
+            shipVY += GRAVITY; shipY += shipVY;
+            let targetAngle = Math.max(-0.6, Math.min(0.6, shipVY * 0.06));
+            shipAngle += (targetAngle - shipAngle) * 0.15;
+            if (shipY < -30 || shipY > HEIGHT + 30) triggerGameOver();
+
+            if (shieldActive) {
+                shieldTimer -= 1;
+                if (shieldTimer <= 0) shieldActive = false;
+            }
+
+            if (!toastShownThisRun && score > personalBest) {
+                toastShownThisRun = true;
+                showToast('NEW PERSONAL BEST!');
+            }
+
+            if (Math.random() < 0.035) asteroids.push({ x: WIDTH + 80, y: Math.random() * HEIGHT, spriteIdx: Math.floor(Math.random() * astSprites.length), size: 50 + Math.random() * 55, rot: Math.random() * Math.PI * 2, rotSpeed: (Math.random() - 0.5) * 0.06 });
+            if (Math.random() < 0.006) spawnPowerup();
+
+            asteroids.forEach((a, i) => {
+                a.x -= 7 + (score * 0.08); a.y += (shipY - a.y) * 0.0025; a.rot += a.rotSpeed;
+                const hit = Math.hypot((WIDTH * 0.25) - a.x, shipY - a.y) < (a.size * 0.35) + 12;
+                if (hit) {
+                    if (shieldActive) {
+                        spawnParticles(a.x, a.y, '#48e0ff', 20, 8, 2);
+                        asteroids.splice(i, 1);
+                        score += 2;
+                        vibrate(15);
+                    } else {
+                        triggerGameOver();
+                    }
+                }
+                if (a.x < -100) { asteroids.splice(i, 1); score++; if (score % 5 === 0) shake = 5; }
+            });
+
+            powerups.forEach((p, i) => {
+                p.x -= 5.5;
+                p.y += Math.sin((p.x * 0.02) + p.phase) * 0.6;
+                if (Math.hypot((WIDTH * 0.25) - p.x, shipY - p.y) < p.size + 14) {
+                    shieldActive = true;
+                    shieldTimer = 260;
+                    powerups.splice(i, 1);
+                    spawnParticles(p.x, p.y, '#fde047', 24, 7, 2.2);
+                    if (audioCtxStarted && pickupSynth) pickupSynth.triggerAttackRelease("C6", "8n");
+                    vibrate(25);
+                } else if (p.x < -60) {
+                    powerups.splice(i, 1);
+                }
+            });
+        }
+        updateActionButtons();
+    }
+
+    function triggerGameOver() {
+        if (state === 'gameover') return;
+        state = 'gameover'; shake = 35; flashAlpha = 0.8;
+        if (audioCtxStarted && explosionSynth) explosionSynth.triggerAttackRelease("2n");
+        spawnParticles(WIDTH * 0.25, shipY, '#f97316', 50, 12, 4);
+        shockwaves.push({ x: WIDTH * 0.25, y: shipY, radius: 10, speed: 8, alpha: 1, color: '#fde047' });
+        vibrate([60, 40, 60]);
+
+        lastFinalScore = score;
+
+        if (score > 0 && score > personalBest) {
+            if (loggedInUser) {
+                // Logged in: save automatically, no prompt needed
+                window.LB.submitScore(score).then(saved => {
+                    if (saved) { personalBest = score; renderLeaderboard(); }
+                });
+            } else {
+                // Not logged in: prompt them to log in / sign up to save it
+                setTimeout(() => showAuthOverlay(score), 900);
+            }
+        }
+        renderLeaderboard();
+    }
+
+    function draw() {
+        ctx.save();
+        if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+        ctx.fillStyle = '#05050f'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        nebulae.forEach(n => {
+            const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r);
+            grad.addColorStop(0, n.color);
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        stars.forEach(s => { ctx.fillStyle = s.color; ctx.fillRect(s.x, s.y, s.size, s.size); });
+        particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = Math.max(0, p.life / p.maxLife); ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size); ctx.globalAlpha = 1; });
+        shockwaves.forEach(sw => { ctx.beginPath(); ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2); ctx.strokeStyle = sw.color; ctx.globalAlpha = Math.max(0, sw.alpha); ctx.lineWidth = 6; ctx.stroke(); ctx.globalAlpha = 1; });
+
+        powerups.forEach(p => {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            const pulse = 1 + Math.sin(Date.now() * 0.006 + p.phase) * 0.1;
+            ctx.rotate(Math.PI / 4);
+            ctx.fillStyle = '#fde047';
+            ctx.shadowColor = '#fde047';
+            ctx.shadowBlur = 14;
+            const s = p.size * pulse * 0.7;
+            ctx.fillRect(-s / 2, -s / 2, s, s);
+            ctx.restore();
+        });
+
+        if (state === 'playing' || state === 'paused') {
+            ctx.save();
+            ctx.translate(WIDTH * 0.25, shipY);
+            ctx.rotate(shipAngle);
+            if (shieldActive) {
+                ctx.save();
+                ctx.rotate(-shipAngle);
+                ctx.beginPath();
+                ctx.arc(0, 0, 42, 0, Math.PI * 2);
+                ctx.strokeStyle = '#fde047';
+                ctx.lineWidth = 3;
+                ctx.globalAlpha = 0.6 + Math.sin(Date.now() * 0.01) * 0.3;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+            ctx.drawImage(shipSprite, -32, -32, 64, 64);
+            ctx.restore();
+        }
+        asteroids.forEach(a => { ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(a.rot); ctx.drawImage(astSprites[a.spriteIdx], -a.size/2, -a.size/2, a.size, a.size); ctx.restore(); });
+        ctx.restore();
+        if (flashAlpha > 0) { ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
+
+        overlay.innerText = "SCORE: " + score;
+        const speedMult = 1 + score * 0.03;
+        speedOverlay.innerText = "SPEED x" + speedMult.toFixed(1) + (shieldActive ? "  🛡" : "");
+
+        if (state !== 'playing') {
+            ctx.fillStyle = 'rgba(5, 5, 15, 0.7)'; ctx.fillRect(0,0,WIDTH,HEIGHT); ctx.fillStyle = '#48e0ff'; ctx.font = 'bold 42px Courier New'; ctx.textAlign = 'center';
+            const title = state === 'start' ? "ASTRO-DASH" : (state === 'paused' ? "PAUSED" : "GAME OVER");
+            const sub = state === 'start' ? "TAP TO START" : (state === 'paused' ? "PRESS ▶ TO RESUME" : "FINAL SCORE: " + score);
+            ctx.fillText(title, WIDTH/2, HEIGHT/2 - 30);
+            ctx.font = 'bold 24px Courier New'; ctx.fillStyle = '#e2e8f0'; ctx.fillText(sub, WIDTH/2, HEIGHT/2 + 30);
+        }
+    }
+
+    function triggerAction() {
+        if (isOverlayOpen()) return;
+        if (state === 'paused') return;
+        initAudio();
+        if (state === 'playing') {
+            shipVY = THRUST;
+            vibrate(12);
+            if (audioCtxStarted && thrustSynth) { thrustSynth.triggerAttackRelease("G2", "16n"); thrustSynth.frequency.exponentialRampToValueAtTime("G4", Tone.now() + 0.1); }
+            spawnParticles(WIDTH * 0.25 - 35, shipY, '#e2e8f0', 8, 4, 1.5);
+        } else if (state === 'start' || state === 'gameover') {
+            score = 0; asteroids = []; powerups = []; particles = []; shockwaves = []; flashAlpha = 0;
+            shipY = HEIGHT / 2; shipVY = 0; shipAngle = 0; shake = 0;
+            shieldActive = false; shieldTimer = 0; reviveUsed = false; toastShownThisRun = false;
+            state = 'playing';
+            updateActionButtons();
+        }
+    }
+
+    canvas.addEventListener('mousedown', triggerAction);
+    window.addEventListener('keydown', (e) => {
+        if (isOverlayOpen()) return;
+        if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); triggerAction(); }
+    });
+    function loop() { update(); draw(); requestAnimationFrame(loop); }
+    renderLeaderboard();
+    updateActionButtons();
+    refreshSkinsUI();
+    loop();
+</script>
+</body>
+</html>
